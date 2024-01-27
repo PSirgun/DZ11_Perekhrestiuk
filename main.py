@@ -1,6 +1,8 @@
 from collections import UserDict
-from collections.abc import Iterator
 from datetime import datetime
+from pathlib import Path
+import pprint
+import pickle
 import re
 
 # class block ----------------------------------------------------------------
@@ -95,11 +97,18 @@ class Record:
         return f"Contact name: {self.name.value}, phones: {'; '.join(p for p in self.phones)}"
 
 class AddressBook(UserDict):
+    def __init__(self):
+        super().__init__()
+        self.lines = 2
+
+
+   
+   
     def add_record(self, contact: Record):
         self.data[contact.name.value] = contact
         self.keys = list(self.data.keys())
-        self.lines = 2
-        self.count = 0
+        self.lines = "2"
+
     def find(self, name):
         if name:
             return self.data.get(name)
@@ -109,12 +118,11 @@ class AddressBook(UserDict):
         if name in self.data:
             del self.data[name]
 
-    def __iter__(self) -> Iterator:
+    def __iter__(self):
         for contact in self.data:
-            print(f"{self.data[contact].birthday}")
             yield {"name":self.data[contact].name.value, "phones":self.data[contact].phones, "birthday":self.data[contact].birthday}
 
-    # def __iter__(self) -> Iterator:
+    # def __iter__(self):
     #     self.index = 0
     #     return self
 
@@ -141,12 +149,23 @@ class AddressBook(UserDict):
             if count == lines:        
                 yield page
                 page = []  
-                count = 0
-                
+                count = 0       
         if page:
             yield page
 
+    def save_data(self):
+        file_name = 'data.bin'
+        with open(file_name, 'wb') as fh:
+            pickle.dump(self.data, fh)
 
+    def load_data(self):
+        file_name = 'data.bin'
+        if Path(file_name).is_file():
+            with open(file_name, 'rb') as fh:
+                self.data = pickle.load(fh)
+        else:
+            print ('"data.bin" has not loaded')
+            return 
 
 class Birthday:
     def __init__(self, value):
@@ -167,7 +186,9 @@ class Birthday:
 
     def __repr__(self):
         return self.value.strftime('%Y-%m-%d')    
-        
+    
+    def __iter__(self):
+        yield self._value.strftime('%Y-%m-%d') 
 #end class block -------------------------------------------------------------------- decorators block
 
 phone_book = AddressBook()
@@ -232,9 +253,20 @@ def sub_show(*args):
             
     return "End phone book"
 
+@decor_func
+def sub_part_show(*args):
+    args = list(args)
+    if args[0] == '':
+        del args[0]
+    contact_list = []
+    for data in phone_book:
+        for v in data.values():
+            if v and (args[0] in v or any(args[0] in str(value) for value in v)):
+                contact_list.append(data)
+                break
 
-
-
+    pprint.pprint(contact_list, sort_dicts=False)
+    return "ok"
 
 @decor_change
 def sub_change(*args):
@@ -289,9 +321,10 @@ def sub_days_to_bd(*args):
     days = contact.days_to_birthday()
     return f"{days} days to {name}'s birthday"
 
+
+
 OPERATIONS = {
     sub_days_to_bd : ("bd?",),
-    sub_add : ("add",),
     sub_remove_phone : ("remove phone",),
     sub_delete : ("delete", ),
     sub_hello : ("hello",), 
@@ -299,7 +332,9 @@ OPERATIONS = {
     sub_phone : ("phone",),
     sub_show : ("show all",),
     sub_add_birthday: ("bd", "birthday"),
-    sub_exit: ("good bye", "close", "exit", ".")
+    sub_exit: ("good bye", "close", "exit", "."),
+    sub_add : ("add",),
+    sub_part_show : ("search",'find'),
 }
 # end sub block -------------------------------------------------------------------------------- func. block
 
@@ -316,6 +351,8 @@ def sanit_name(*args):
     return args
 
 def main():
+    
+    phone_book.load_data()
     while True:
         user_input = input(">>> ")
         command_found = False        
@@ -327,6 +364,7 @@ def main():
                     user_args = sanit_name(*user_input[len(com):].strip().split())
                     print(sub_f(*user_args))
                     if sub_f == sub_exit:
+                        phone_book.save_data()
                         return
                     command_found = True
                     break
